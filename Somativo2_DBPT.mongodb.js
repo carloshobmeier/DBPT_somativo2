@@ -500,6 +500,31 @@ db.transacao.aggregate([
 //      por um período limitado.
 
 
+    //desconto para produtos de uma subcategoria
+use('banco_mongodb')
+db.produto.updateMany(
+    { subcategoriaId: 2 },
+    {
+        $set: {
+            "promocao.desconto": 20,
+            "promocao.dataInicio": new Date("2024-12-01"),
+            "promocao.dataFim": new Date("2024-12-30")
+        }
+    }
+);
+
+    //desconto para produtos de uma categoria
+use('banco_mongodb')
+db.produto.updateMany(
+    { categoriaId: 1 },
+    {
+        $set: {
+            "promocao.desconto": 15,
+            "promocao.dataInicio": new Date("2024-12-01"),
+            "promocao.dataFim": new Date("2024-12-30")
+        }
+    }
+);
 
 
 
