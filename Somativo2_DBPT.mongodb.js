@@ -386,6 +386,39 @@ db.produto.find(
 
 //    - Escreva uma consulta de agregação para encontrar a média de avaliações para cada produto.
 
+use('banco_mongodb')
+db.avaliacao.aggregate([
+    // Group by product ID and calculate average rating
+    {
+        $group: {
+            _id: "$produtoId",
+            mediaAvaliacoes: { $avg: "$nota" },
+            totalAvaliacoes: { $sum: 1 }
+        }
+    },
+    // Join with products collection to get product names
+    {
+        $lookup: {
+            from: "produto",
+            localField: "_id",
+            foreignField: "id",
+            as: "produto"
+        }
+    },
+    // Format the output
+    {
+        $project: {
+            _id: 0,
+            produtoId: "$_id",
+            nomeProduto: { $arrayElemAt: ["$produto.nome", 0] },
+            mediaAvaliacoes: { $round: ["$mediaAvaliacoes", 1] },
+            totalAvaliacoes: 1
+        }
+    },
+    // Sort by average rating (highest first)
+    { $sort: { mediaAvaliacoes: -1 } }
+])
+
 //    - Escreva uma consulta de agregação para encontrar o total de vendas para cada categoria.
 
 
