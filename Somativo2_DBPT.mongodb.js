@@ -323,16 +323,56 @@ db.avaliacao.insertMany([
 // 3. Consultas:
 
 //    - Escreva uma consulta para encontrar todos os produtos em uma categoria específica.
+use('banco_mongodb')
+db.produto.find({ categoriaId: 1 });
+
 
 //    - Escreva uma consulta para encontrar todas as avaliações de um produto específico.
+use('banco_mongodb')
+db.avaliacao.find({ produtoId: 1 });
 
 //    - Escreva uma consulta para criar uma nova transação.
+use('banco_mongodb')
+db.transacao.insertOne({
+    id: 11,
+    usuarioId: 2,
+    produtoId: 5,
+    quantidade: 3,
+    data: new Date()
+});
+
+    // verificando
+use('banco_mongodb')
+db.transacao.find({ id: 11 });
 
 //    - Escreva uma consulta para atualizar a quantidade disponível de um produto após uma compra.
 
+    //como estava antes
+use('banco_mongodb')
+db.produto.find(
+    { id: 5 },
+    { nome: 1, quantidadeEmEstoque: 1, _id: 0 }
+);
+
+
+    //atualizando
+use('banco_mongodb')
+db.produto.updateOne(
+    { id: 5 },
+    { $inc: { quantidadeEmEstoque: -3 } }
+);
+
+    //como ficou depois
+use('banco_mongodb')
+db.produto.find(
+    { id: 5 },
+    { nome: 1, quantidadeEmEstoque: 1, _id: 0 }
+);
 
 
 
+
+///////////////////////////////////////////////////////////////////////////////////
 
 // 4. Índices:
 
