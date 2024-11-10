@@ -413,7 +413,6 @@ db.avaliacao.createIndex({ produtoId: 1 });
 
 use('banco_mongodb')
 db.avaliacao.aggregate([
-    // Group by product ID and calculate average rating
     {
         $group: {
             _id: "$produtoId",
@@ -421,7 +420,6 @@ db.avaliacao.aggregate([
             totalAvaliacoes: { $sum: 1 }
         }
     },
-    // Join with products collection to get product names
     {
         $lookup: {
             from: "produto",
@@ -430,7 +428,6 @@ db.avaliacao.aggregate([
             as: "produto"
         }
     },
-    // Format the output
     {
         $project: {
             _id: 0,
@@ -440,14 +437,56 @@ db.avaliacao.aggregate([
             totalAvaliacoes: 1
         }
     },
-    // Sort by average rating (highest first)
     { $sort: { mediaAvaliacoes: -1 } }
 ])
 
 //    - Escreva uma consulta de agregação para encontrar o total de vendas para cada categoria.
 
-
-
+use('banco_mongodb')
+db.transacao.aggregate([
+    {
+        $lookup: {
+            from: "produto",
+            localField: "produtoId",
+            foreignField: "id",
+            as: "produto"
+        }
+    },
+    { $unwind: "$produto" },
+    {
+        $lookup: {
+            from: "categoria",
+            localField: "produto.categoriaId",
+            foreignField: "id",
+            as: "categoria"
+        }
+    },
+    { $unwind: "$categoria" },
+    {
+        $group: {
+            _id: {
+                categoriaId: "$produto.categoriaId",
+                categoriaNome: "$categoria.nome"
+            },
+            totalVendas: { 
+                $sum: { $multiply: ["$quantidade", "$produto.preco"] }
+            },
+            quantidadeTotal: { $sum: "$quantidade" },
+            numeroTransacoes: { $sum: 1 }
+        }
+    },
+    {
+        $project: {
+            _id: 0,
+            categoriaId: "$_id.categoriaId",
+            categoria: "$_id.categoriaNome",
+            totalVendas: { $round: ["$totalVendas", 2] },
+            quantidadeTotal: 1,
+            numeroTransacoes: 1
+        }
+    },
+    { $sort: { totalVendas: -1 } }
+]);
 
 
 
