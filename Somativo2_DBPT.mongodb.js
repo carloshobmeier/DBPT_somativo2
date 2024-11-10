@@ -513,6 +513,38 @@ db.produto.updateMany(
     }
 );
 
+
+
+use('banco_mongodb')
+db.produto.aggregate([
+    {
+    $match: {
+        subcategoriaId: { $in: [2, 4] }
+    }
+    },
+    {
+    $addFields: {
+        precoFinal: {
+        $cond: {
+            if: { $ne: [{ $type: "$promocao" }, "missing"] },
+            then: {
+            $multiply: [
+                "$preco",
+                {
+                $subtract: [
+                    1,
+                    { $divide: ["$promocao.desconto", 100] }
+                ]
+                }
+            ]
+            },
+            else: "$preco"
+        }
+        }
+    }
+    }
+])
+
     //desconto para produtos de uma categoria
 use('banco_mongodb')
 db.produto.updateMany(
