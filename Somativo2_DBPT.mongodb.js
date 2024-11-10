@@ -378,9 +378,34 @@ db.produto.find(
 
 //    - Pense sobre quais índices seriam úteis para otimizar as consultas mais comuns.
 
+    // para o usuário autenticar vai ter que buscar o e-mail
+use('banco_mongodb')
+db.usuario.createIndex({ email: 1 });
+
+
+    // Consultas que filtram produtos por categoria ou subcategoria podem se beneficiar de um índice composto das duas:
+use('banco_mongodb')
+db.produto.createIndex({ categoriaId: 1, subcategoriaId: 1 });
+
+
+    // para verificar a disponibilidade de um produto será comum consultar a quantidade em estoque
+use('banco_mongodb')
+db.produto.createIndex({ quantidadeEmEstoque: 1 });
+
+
+    // para consultas que objetivem levantar estatísticas das vendas de um produto
+use('banco_mongodb')  
+db.transacao.createIndex({ produtoId: 1 });
+
+
+    // será comum consultar todas as avaliações de um único produto
+use('banco_mongodb')  
+db.avaliacao.createIndex({ produtoId: 1 });
 
 
 
+
+///////////////////////////////////////////////////////////////////////////////////
 
 // 5. Agregações:
 
