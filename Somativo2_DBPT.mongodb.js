@@ -490,9 +490,16 @@ db.transacao.aggregate([
 
 
 
+///////////////////////////////////////////////////////////////////////////////////
+
 // Depois da sprint inicial, os stackholders decidiram algumas mudanças em relação ao projeto inicial.
 // Você deve realizar todas as mudanças sem que tenha perda de dados ou perca de integridade dos dados.
 
+///////////////////////////////////////////////////////////////////////////////////
+
+
+
+///////////////////////////////////////////////////////////////////////////////////
 
 // 6. Promoções:
 
@@ -528,14 +535,49 @@ db.produto.updateMany(
 
 
 
+///////////////////////////////////////////////////////////////////////////////////
+
 // 7. Pontos de Fidelidade:
 
 //    - Implemente um sistema de pontos de fidelidade onde os usuários ganham pontos por cada compra,
 //      que podem ser usados para descontos em futuras compras.
 
+    // inserindo campo pontosFidelidade para todos os usuários
+use('banco_mongodb')
+db.usuario.updateMany(
+    {},
+    { $set: { pontosFidelidade: 0 } }
+);
+
+
+    // atualizando esse campo no usuário toda vez que for feita uma transação
+function registrarTransacao(transacao) {
+    use('banco_mongodb');
+
+    const produto = db.produto.findOne({ id: transacao.produtoId });
+    
+    if (produto) {
+        const pontosGanhos = transacao.quantidade * produto.preco;
+
+        db.transacao.insertOne(transacao);
+
+        db.usuario.updateOne(
+            { id: transacao.usuarioId },
+            { $inc: { pontosFidelidade: pontosGanhos } }
+        );
+
+        print(`Transação registrada e ${pontosGanhos} pontos adicionados para o usuário`);
+    } 
+    
+    else {
+        print("Produto não encontrado.");
+    }
+}
 
 
 
+
+///////////////////////////////////////////////////////////////////////////////////
 
 // 8. Resposta a Avaliações:
 
@@ -544,6 +586,8 @@ db.produto.updateMany(
 
 
 
+
+///////////////////////////////////////////////////////////////////////////////////
 
 // 9. Geolocalização
 
@@ -566,6 +610,8 @@ db.produto.updateMany(
 
 
 
+
+///////////////////////////////////////////////////////////////////////////////////
 
 // 10. Relatórios:
 
