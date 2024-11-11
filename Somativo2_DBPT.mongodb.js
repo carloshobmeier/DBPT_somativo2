@@ -514,7 +514,7 @@ db.produto.updateMany(
     {
         $set: {
             "promocao.desconto": 20,
-            "promocao.dataInicio": new Date("2024-12-01"),
+            "promocao.dataInicio": new Date("2024-11-01"),
             "promocao.dataFim": new Date("2024-12-30")
         }
     }
@@ -551,6 +551,81 @@ db.produto.aggregate([
     }
     }
 ])
+
+function calcularPrecoFinal(produtoId) {
+    use('banco_mongodb');
+    
+    return db.produto.aggregate([
+        {
+            $match: { id: produtoId }
+        },
+        {
+            $addFields: {
+                precoFinal: {
+                    $cond: {
+                        if: {
+                            $and: [
+                                // Verifica se existe promoção
+                                { $ne: [{ $type: "$promocao" }, "missing"] },
+                                // Verifica se a data atual está dentro do período da promoção
+                                { $lte: ["$promocao.dataInicio", new Date()] },
+                                { $gte: ["$promocao.dataFim", new Date()] }
+                            ]
+                        },
+                        then: {
+                            $multiply: [
+                                "$preco",
+                                {
+                                    $subtract: [
+                                        1,
+                                        { $divide: ["$promocao.desconto", 100] }
+                                    ]
+                                }
+                            ]
+                        },
+                        else: "$preco"
+                    }
+                },
+                promocaoAtiva: {
+                    $and: [
+                        { $ne: [{ $type: "$promocao" }, "missing"] },
+                        { $lte: ["$promocao.dataInicio", new Date()] },
+                        { $gte: ["$promocao.dataFim", new Date()] }
+                    ]
+                },
+                descontoAplicado: {
+                    $cond: {
+                        if: { $ne: [{ $type: "$promocao" }, "missing"] },
+                        then: "$promocao.desconto",
+                        else: 0
+                    }
+                }
+            }
+        },
+        {
+            $project: {
+                _id: 0,
+                id: 1,
+                nome: 1,
+                precoOriginal: "$preco",
+                precoFinal: { $round: ["$precoFinal", 2] },
+                promocaoAtiva: 1,
+                descontoAplicado: 1,
+                economia: {
+                    $round: [
+                        {
+                            $subtract: ["$preco", "$precoFinal"]
+                        },
+                        2
+                    ]
+                }
+            }
+        }
+    ]).toArray();
+}
+
+// Exemplo de uso:
+calcularPrecoFinal(3)
 
     //desconto para produtos de uma categoria
 use('banco_mongodb')
