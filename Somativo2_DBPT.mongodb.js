@@ -1040,9 +1040,15 @@ function gerarRelatorioDesempenhoProdutos() {
 gerarRelatorioDesempenhoProdutos()
 
 // 3. Relatório de Análise de Categorias
-function gerarRelatorioCategoria() {
+function gerarRelatorioCategoria(categoriaNome) {
     use('banco_mongodb');
+    
     return db.categoria.aggregate([
+        {
+            $match: {
+                nome: categoriaNome
+            }
+        },
         {
             $lookup: {
                 from: "produto",
@@ -1058,9 +1064,7 @@ function gerarRelatorioCategoria() {
                 pipeline: [
                     {
                         $match: {
-                            $expr: {
-                                $in: ["$produtoId", "$$produtoIds"]
-                            }
+                            $expr: { $in: ["$produtoId", "$$produtoIds"] }
                         }
                     }
                 ],
@@ -1071,50 +1075,31 @@ function gerarRelatorioCategoria() {
             $project: {
                 _id: 0,
                 categoria: "$nome",
-                numeroProdutos: { $size: "$produtos" },
-                vendaTotal: {
-                    $sum: {
-                        $map: {
-                            input: "$transacoes",
-                            as: "t",
-                            in: {
-                                $multiply: [
-                                    "$$t.quantidade",
-                                    {
-                                        $arrayElemAt: [
-                                            "$produtos.preco",
-                                            {
-                                                $indexOfArray: [
-                                                    "$produtos.id",
-                                                    "$$t.produtoId"
-                                                ]
-                                            }
-                                        ]
+                totalProdutos: { $size: "$produtos" },
+                totalVendas: { 
+                    $round: [
+                        { 
+                            $sum: {
+                                $map: {
+                                    input: "$transacoes",
+                                    as: "t",
+                                    in: { 
+                                        $multiply: ["$$t.quantidade", 
+                                            { $arrayElemAt: ["$produtos.preco", 0] }
+                                        ] 
                                     }
-                                ]
+                                }
                             }
-                        }
-                    }
+                        }, 
+                        2
+                    ]
                 },
                 quantidadeVendida: { $sum: "$transacoes.quantidade" }
             }
-        },
-        {
-            $project: {
-                categoria: 1,
-                numeroProdutos: 1,
-                vendaTotal: { $round: ["$vendaTotal", 2] },
-                quantidadeVendida: 1,
-                ticketMedioPorProduto: {
-                    $round: [{ $divide: ["$vendaTotal", "$numeroProdutos"] }, 2]
-                }
-            }
-        },
-        { $sort: { vendaTotal: -1 } }
+        }
     ]);
 }
-
-gerarRelatorioCategoria()
+gerarRelatorioCategoria("Eletrônicos")
 
 // 4. Relatório de Tendências de Vendas
 function gerarRelatorioTendencias(diasAnalise) {
