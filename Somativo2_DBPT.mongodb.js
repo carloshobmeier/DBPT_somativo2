@@ -615,9 +615,33 @@ function registrarTransacao(transacao) {
 
 //    - Permita que os vendedores respondam às avaliações deixadas em seus produtos.
 
+function responderAvaliacao(avaliacaoId, vendedorId, textoResposta) {    
+    const result = db.avaliacao.updateOne(
+        { _id: avaliacaoId, resposta: null },
+        {
+            $set: {
+                resposta: {
+                    texto: textoResposta,
+                    data: new Date(),
+                    vendedorId: vendedorId
+                }
+            }
+        }
+    );
 
+    if (result.matchedCount === 0) {
+        print("Avaliação não encontrada ou já possui resposta");
+        return false;
+    }
 
+    if (result.modifiedCount === 1) {
+        print("Resposta adicionada com sucesso");
+        return true;
+    }
 
+    print("Erro ao adicionar resposta");
+    return false;
+}
 
 ///////////////////////////////////////////////////////////////////////////////////
 
