@@ -648,19 +648,179 @@ function responderAvaliacao(avaliacaoId, vendedorId, textoResposta) {
 // 9. Geolocalização
 
 //   - Os usuários podem definir sua localização geográfica.
+use('banco_mongodb');
+db.usuario.updateMany({}, {
+    $set: { "localizacao": { "type": "Point", "coordinates": [-25.450224013735003, -49.251296729524526] } } // coordenada em Curitiba
+});
+
+
 
 //   - Os produtos têm a localização geográfica do vendedor associada a eles.
+use('banco_mongodb');
+db.produto.updateMany({}, {
+    $set: { "localizacaoVendedor": { "type": "Point", "coordinates": [-25.450224013735003, -49.251296729524526] } } // coordenada em Curitiba
+});
+
 
 //   - crie indices caso ache necessário.
+use('banco_mongodb');
+db.usuario.createIndex({ "localizacao": "2dsphere" });
+db.produto.createIndex({ "localizacaoVendedor": "2dsphere" });
+
 
 //   - Os usuários podem buscar produtos com base na proximidade geográfica, podendo filtrar os
 //      resultados por raio de distância.
 
+
+    // Encontrar produtos dentro de um raio de 30 km do usuário
+use('banco_mongodb');
+db.produto.find({
+    localizacaoVendedor: {
+        $near: {
+            $geometry: {
+                type: "Point",
+                coordinates: [-22.90654324828776, -43.18092892813627] // Exemplo de coordenadas de alguém no RJ
+            },
+            $maxDistance: 30000
+        }
+    }
+});
+
+
+use('banco_mongodb');
+db.produto.find({
+    localizacaoVendedor: {
+        $near: {
+            $geometry: {
+                type: "Point",
+                coordinates: [-25.455956325732007, -49.51498735778559] // Exemplo de coordenadas de Campo Largo
+            },
+            $maxDistance: 30000
+        }
+    }
+});
+
+
+
 //   - Escreva uma consulta de agregação para encontrar a média de distância entre compradores
 //      e vendedores para transações concluídas.
+use('banco_mongodb');
+db.transacao.aggregate([
+    {
+        $lookup: {
+            from: "usuario",
+            localField: "usuarioId",
+            foreignField: "id",
+            as: "comprador"
+        }
+    },
+    { $unwind: "$comprador" },
+    {
+        $lookup: {
+            from: "produto",
+            localField: "produtoId",
+            foreignField: "id",
+            as: "produto"
+        }
+    },
+    { $unwind: "$produto" },
+    {
+        $addFields: {
+            distancia: {
+                $function: {
+                    body: function (compradorLoc, vendedorLoc) {
+                        var R = 6371e3; // Metros, raio médio da Terra
+                        var lat1 = compradorLoc.coordinates[1] * Math.PI / 180;
+                        var lat2 = vendedorLoc.coordinates[1] * Math.PI / 180;
+                        var deltaLat = (lat2 - lat1);
+                        var deltaLon = (vendedorLoc.coordinates[0] - compradorLoc.coordinates[0]) * Math.PI / 180;
+
+                        var a = Math.sin(deltaLat/2) * Math.sin(deltaLat/2) +
+                                Math.cos(lat1) * Math.cos(lat2) *
+                                Math.sin(deltaLon/2) * Math.sin(deltaLon/2);
+                        var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+
+                        return R * c;
+                    },
+                    args: ["$comprador.localizacao", "$produto.localizacaoVendedor"],
+                    lang: "js"
+                }
+            }
+        }
+    },
+    {
+        $group: {
+            _id: null,
+            mediaDistancia: { $avg: "$distancia" }
+        }
+    },
+    {
+        $project: {
+            _id: 0,
+            mediaDistancia: 1
+        }
+    }
+]);
+
+
+
+
 
 //   - Escreva uma consulta de agregação para encontrar a categoria de produto mais popular em
 //      uma área geográfica específica.
+use('banco_mongodb');
+db.produto.aggregate([
+    {
+        $geoNear: {
+            near: { type: "Point", coordinates: [-25.450224013735003, -49.251296729524526] },
+            distanceField: "distancia",
+            maxDistance: 30000,
+            includeLocs: "location",
+            spherical: true
+        }
+    },
+    {
+        $lookup: {
+            from: "categoria",
+            localField: "categoriaId",
+            foreignField: "id",
+            as: "categoria"
+        }
+    },
+    {
+        $unwind: "$categoria"
+    },
+    {
+        $lookup: {
+            from: "transacao",
+            localField: "id",
+            foreignField: "produtoId",
+            as: "transacoes"
+        }
+    },
+    {
+        $unwind: "$transacoes"
+    },
+    {
+        $group: {
+            _id: "$categoria.nome",
+            totalVendas: { $sum: { $multiply: ["$transacoes.quantidade", "$transacoes.preco"] } },
+            numeroProdutos: { $sum: 1 }
+        }
+    },
+    {
+        $project: {
+            _id: 0,
+            categoria: "$_id",
+            totalVendas: { $round: ["$totalVendas", 2] },
+            numeroProdutos: 1
+        }
+    },
+    { $sort: { totalVendas: -1 } },
+    { $limit: 1 }
+]);
+
+
 
 
 
