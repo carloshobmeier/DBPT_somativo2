@@ -671,4 +671,272 @@ function responderAvaliacao(avaliacaoId, vendedorId, textoResposta) {
 
 // 10. Relatórios:
 
-//     - Crie consultas de agregação para gerar relatórios de vendas para os vendedores.
+// 1. Relatório de Vendas por Período
+function gerarRelatorioVendasPorPeriodo(dataInicio, dataFim) {
+    use('banco_mongodb');
+    return db.transacao.aggregate([
+        {
+            $match: {
+                data: {
+                    $gte: new Date(dataInicio),
+                    $lte: new Date(dataFim)
+                }
+            }
+        },
+        {
+            $lookup: {
+                from: "produto",
+                localField: "produtoId",
+                foreignField: "id",
+                as: "produto"
+            }
+        },
+        { $unwind: "$produto" },
+        {
+            $group: {
+                _id: {
+                    ano: { $year: "$data" },
+                    mes: { $month: "$data" }
+                },
+                totalVendas: { $sum: { $multiply: ["$quantidade", "$produto.preco"] } },
+                quantidadeVendida: { $sum: "$quantidade" },
+                numeroTransacoes: { $count: {} }
+            }
+        },
+        {
+            $project: {
+                _id: 0,
+                periodo: {
+                    $concat: [
+                        { $toString: "$_id.ano" },
+                        "-",
+                        {
+                            $cond: {
+                                if: { $lt: ["$_id.mes", 10] },
+                                then: { $concat: ["0", { $toString: "$_id.mes" }] },
+                                else: { $toString: "$_id.mes" }
+                            }
+                        }
+                    ]
+                },
+                totalVendas: { $round: ["$totalVendas", 2] },
+                quantidadeVendida: 1,
+                numeroTransacoes: 1,
+                ticketMedio: { 
+                    $round: [{ $divide: ["$totalVendas", "$numeroTransacoes"] }, 2] 
+                }
+            }
+        },
+        { $sort: { periodo: 1 } }
+    ]);
+}
+
+gerarRelatorioVendasPorPeriodo("2023-01-01", "2023-12-31")
+
+
+// 2. Relatório de Desempenho por Produto
+function gerarRelatorioDesempenhoProdutos() {
+    use('banco_mongodb');
+    return db.produto.aggregate([
+        {
+            $lookup: {
+                from: "transacao",
+                localField: "id",
+                foreignField: "produtoId",
+                as: "vendas"
+            }
+        },
+        {
+            $lookup: {
+                from: "avaliacao",
+                localField: "id",
+                foreignField: "produtoId",
+                as: "avaliacoes"
+            }
+        },
+        {
+            $project: {
+                _id: 0,
+                id: 1,
+                nome: 1,
+                preco: 1,
+                quantidadeEmEstoque: 1,
+                totalVendas: {
+                    $sum: {
+                        $map: {
+                            input: "$vendas",
+                            as: "venda",
+                            in: { $multiply: ["$$venda.quantidade", "$preco"] }
+                        }
+                    }
+                },
+                quantidadeVendida: {
+                    $sum: "$vendas.quantidade"
+                },
+                mediaAvaliacoes: {
+                    $avg: "$avaliacoes.nota"
+                },
+                numeroAvaliacoes: {
+                    $size: "$avaliacoes"
+                }
+            }
+        },
+        {
+            $project: {
+                id: 1,
+                nome: 1,
+                preco: 1,
+                quantidadeEmEstoque: 1,
+                totalVendas: { $round: ["$totalVendas", 2] },
+                quantidadeVendida: 1,
+                mediaAvaliacoes: { $round: ["$mediaAvaliacoes", 1] },
+                numeroAvaliacoes: 1,
+                taxaRotatividade: {
+                    $round: [{
+                        $divide: ["$quantidadeVendida", "$quantidadeEmEstoque"]
+                    }, 2]
+                }
+            }
+        },
+        { $sort: { totalVendas: -1 } }
+    ]);
+}
+
+gerarRelatorioDesempenhoProdutos()
+
+// 3. Relatório de Análise de Categorias
+function gerarRelatorioCategoria() {
+    use('banco_mongodb');
+    return db.categoria.aggregate([
+        {
+            $lookup: {
+                from: "produto",
+                localField: "id",
+                foreignField: "categoriaId",
+                as: "produtos"
+            }
+        },
+        {
+            $lookup: {
+                from: "transacao",
+                let: { produtoIds: "$produtos.id" },
+                pipeline: [
+                    {
+                        $match: {
+                            $expr: {
+                                $in: ["$produtoId", "$$produtoIds"]
+                            }
+                        }
+                    }
+                ],
+                as: "transacoes"
+            }
+        },
+        {
+            $project: {
+                _id: 0,
+                categoria: "$nome",
+                numeroProdutos: { $size: "$produtos" },
+                vendaTotal: {
+                    $sum: {
+                        $map: {
+                            input: "$transacoes",
+                            as: "t",
+                            in: {
+                                $multiply: [
+                                    "$$t.quantidade",
+                                    {
+                                        $arrayElemAt: [
+                                            "$produtos.preco",
+                                            {
+                                                $indexOfArray: [
+                                                    "$produtos.id",
+                                                    "$$t.produtoId"
+                                                ]
+                                            }
+                                        ]
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                },
+                quantidadeVendida: { $sum: "$transacoes.quantidade" }
+            }
+        },
+        {
+            $project: {
+                categoria: 1,
+                numeroProdutos: 1,
+                vendaTotal: { $round: ["$vendaTotal", 2] },
+                quantidadeVendida: 1,
+                ticketMedioPorProduto: {
+                    $round: [{ $divide: ["$vendaTotal", "$numeroProdutos"] }, 2]
+                }
+            }
+        },
+        { $sort: { vendaTotal: -1 } }
+    ]);
+}
+
+gerarRelatorioCategoria()
+
+// 4. Relatório de Tendências de Vendas
+function gerarRelatorioTendencias(diasAnalise) {
+    use('banco_mongodb');
+    const dataCorte = new Date();
+    dataCorte.setDate(dataCorte.getDate() - diasAnalise);
+
+    return db.transacao.aggregate([
+        {
+            $match: {
+                data: { $gte: dataCorte }
+            }
+        },
+        {
+            $lookup: {
+                from: "produto",
+                localField: "produtoId",
+                foreignField: "id",
+                as: "produto"
+            }
+        },
+        { $unwind: "$produto" },
+        {
+            $group: {
+                _id: {
+                    dia: { $dayOfMonth: "$data" },
+                    mes: { $month: "$data" },
+                    ano: { $year: "$data" }
+                },
+                vendasDiarias: { 
+                    $sum: { $multiply: ["$quantidade", "$produto.preco"] }
+                },
+                transacoes: { $sum: 1 }
+            }
+        },
+        {
+            $project: {
+                _id: 0,
+                data: {
+                    $dateFromParts: {
+                        year: "$_id.ano",
+                        month: "$_id.mes",
+                        day: "$_id.dia"
+                    }
+                },
+                vendasDiarias: { $round: ["$vendasDiarias", 2] },
+                transacoes: 1,
+                ticketMedioDiario: {
+                    $round: [
+                        { $divide: ["$vendasDiarias", "$transacoes"] },
+                        2
+                    ]
+                }
+            }
+        },
+        { $sort: { data: 1 } }
+    ]);
+}
+
+gerarRelatorioTendencias(30) 
