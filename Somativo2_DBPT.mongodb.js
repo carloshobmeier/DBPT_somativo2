@@ -657,19 +657,26 @@ db.usuario.updateMany(
 );
 
 
-    // atualizando esse campo no usuário toda vez que for feita uma transação
-function registrarTransacao(transacao) {
+function registrarTransacao(produtoId, usuarioId, quantidade, transacaoId) {
     use('banco_mongodb');
 
-    const produto = db.produto.findOne({ id: transacao.produtoId });
+    const produto = db.produto.findOne({ id: produtoId});
     
     if (produto) {
-        const pontosGanhos = transacao.quantidade * produto.preco;
+        const pontosGanhos = quantidade * produto.preco;
+        const novaTransacao = {
+            id: transacaoId,
+            produtoId: produtoId,
+            usuarioId: usuarioId,
+            quantidade: quantidade,
+            pontosGanhos: pontosGanhos,
+            data: new Date()
+        };
 
-        db.transacao.insertOne(transacao);
+        db.transacao.insertOne(novaTransacao);
 
         db.usuario.updateOne(
-            { id: transacao.usuarioId },
+            { id: usuarioId },
             { $inc: { pontosFidelidade: pontosGanhos } }
         );
 
@@ -681,7 +688,7 @@ function registrarTransacao(transacao) {
     }
 }
 
-
+registrarTransacao(1, 1, 2, 20);
 
 
 ///////////////////////////////////////////////////////////////////////////////////
